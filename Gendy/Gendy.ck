@@ -4,29 +4,28 @@ public class Gendy extends Chugen
   int x_idx, y_idx;
 
   // input parameters into two grous:
-  100 => int num_segments; // # of segs in a given waveform, I
+  10 => int num_segments; // # of segs in a given waveform, I
   Math.random2f(0.0, 1.0) => float Y;
   float x_vals[num_segments];
   float y_vals[num_segments];
+  wave_length(10);
 
   // stochastic distribution of duration
-  -1 => int xadd_min; // limit the values added to the xs of a waveform
-  1  => int xadd_max;
-  100 => int mir_smin; // limit the number of samples per waveform segment
-  1000  => int mir_smax; 
+  -100 => float xadd_min; // limit the values added to the xs of a waveform
+  100  => float xadd_max;
+  Math.random2f(1.0, 100.0) => float mir_xmin; // limit the number of samples per waveform segment
+  Math.random2f(1.0, 100.0)  => float mir_xmax; 
 
   // stochastic distribution of our amplitude
-  float yadd_min, yadd_max; // limit the values added to the ys of a waveform
-  -1.0  => float mir_ymin; // limit the possible values of the ys of a waveform 
-  1.0   => float mir_ymax;
+  -0.1 => float yadd_min;
+  0.1 => float yadd_max; // limit the values added to the ys of a waveform
+  -0.9  => float mir_ymin; // limit the possible values of the ys of a waveform 
+  0.9   => float mir_ymax;
 
-  for(int i; i < num_segments; i++)
-  {
-    1.0 => y_vals[i];
-    mir_smin => x_vals[i];
-  }
   int t;
-  float seg_end;
+  float seg_end, xadd, yadd;
+
+  "cauchy" => string dist_type;
 
 
   // x array stores the duration values of each waveform segment
@@ -40,53 +39,111 @@ public class Gendy extends Chugen
     1 +=> t;
     if(t >= seg_end) {
       (x_idx + 1) % num_segments => x_idx;
-      mirror_x(exponential(x_vals[x_idx], Y) + x_vals[x_idx]) => seg_end;
+      mirror(xadd_min, xadd_max, distribution(x_vals[x_idx], Y)) => xadd;
 
       if(y_idx + 1 % num_segments == 0) {
         y_vals[y_idx] => y_vals[y_idx + 1];    
       } else {
-        mirror_y(exponential(y_vals[y_idx] , Y) + y_vals[y_idx]) => y_vals[(y_idx + 1) % num_segments];
+        mirror(yadd_min, yadd_max, distribution(y_vals[y_idx], Y)) => yadd;
+        mirror(mir_xmin, mir_xmax, x_vals[x_idx] + xadd) => x_vals[x_idx];
+        mirror(mir_ymin, mir_ymax, y_vals[y_idx] + yadd) => y_vals[y_idx];
       }
       (y_idx + 1) % num_segments => y_idx;
     } else {
       (y_vals[(y_idx + 1) % num_segments] - y_vals[y_idx]) / x_vals[x_idx] +=> y_vals [y_idx];
     }
 
+    //<<< y_vals[y_idx], x_vals[x_idx], "" >>>;
     return y_vals[y_idx];
   }
 
-  fun float mirror_x(float old_x)
+  fun float mirror(float lower, float upper, float val)
   {
-    while(old_x >= mir_smax || old_x <= mir_smin)
+    if(val > upper || val < lower)
     {
-      0.5 *=> old_x;
+      upper - lower => float range;
+      if(val < lower) 2 * range - val => val; // get val in the range if needed
+      fmod(val - upper, 2 * range) => val;
+      if(val < range) upper - val => val;
+      else val - range => val;
     }
-    return old_x;
+
+    return val;
   }
 
-  fun float mirror_y(float old_y)
+  fun void wave_length(int length)
   {
-    while(old_y >= mir_ymax || old_y <= mir_ymin)
+    if(length > num_segments)
     {
-      -0.9 *=> old_y;
+      y_vals.size(length);
+      x_vals.size(length);
+      for(num_segments - 1 => int i; i < length; i++)
+      {
+        1.0 => y_vals[i];
+        mir_xmin => x_vals[i];
+      }
+      length => num_segments;
     }
-    return old_y;
+    else if(length < num_segments)
+    {
+      length => num_segments;
+      y_vals.size(num_segments);
+      x_vals.size(num_segments);
+    }
   }
 
   // probability distributions - actually inverses of the realy distributions
-  fun float exponential(float a, float y)
+  // NB: really wish we had switch/case here...
+  fun float distribution(float a, float y)
   {
-    if(a == 0) 1 +=> a;
-    return (-1 / (a * a)) * Math.log10(1 - y);
+    if(a > 1.0) 1.0 => a;       // must be in 0..1
+    if(a < 0.0001) 0.0001 => a;
+    if(dist_type == "exponential")
+    {
+      Math.log10(1.0 - (0.999 * a)) => float c;
+      Math.log(1.0 - (y * 0.999 * a)) / c => float temp;
+
+      return 2 * temp - 1.0;
+    } 
+    else if(dist_type == "cauchy")
+    {
+      Math.atan(10 * a) => float c;
+      (1 / a) * Math.tan(c * (2 * y - 1)) => float temp;
+
+      return temp * 0.1;
+    } 
+    else 
+    {
+      return 2 * y - 1.0;
+    }
+  }
+
+  fun float fmod(float numer, float denom)
+  {
+    (numer / denom) $ int => float tquot;
+    return numer - tquot * denom;
   }
 }
 
 Gendy g => Gain gain => dac;
+Gendy g2 => blackhole;
+g2.wave_length(10000);
+["cauchy", "exponential"] @=> string types[];
 gain.gain(0.1);
-second => now;
-for(int i; i < 10; i++)
+1::second => now;
+0 => int i;
+while(true)
 {
-  Math.random2(100, 1000) => g.mir_smin;
-  Math.random2(g.mir_smin, 1000) => g.mir_smax;
-  500::ms => now;
+  g2.last() / g.last() * Math.random2f(-10, 100)=> g.yadd_min;
+  g2.last() / g.last()* Math.random2f(-10, 100)=> g.yadd_max;
+  g2.last() / g.last() * Math.random2f(-10, 100)=> g.xadd_min;
+  g2.last() / g.last() * Math.random2f(-10, 100)=> g.xadd_max;
+
+  if(i % 2 == 0)
+  {
+    types[Math.random2(0, types.size() - 1)] @=> g.dist_type;
+  }
+
+  100::ms => now;
+  i ++;
 }
