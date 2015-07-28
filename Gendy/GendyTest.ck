@@ -24,7 +24,7 @@ class Gendy extends Chugen {
         600 => m_maxFreq;
 
         // for testing only
-        400 => m_currentFreq;
+        150 => m_currentFreq;
 
         pi => m_pi;
         1.0/pi => m_invPi;
@@ -36,7 +36,10 @@ class Gendy extends Chugen {
         m_yVals.size(m_numSegments);
         m_xVals.size(m_numSegments);
         for (0 => int i; i < m_numSegments; i++) {
-            Math.random2f(-1.0, 1.0) => m_yVals[i];
+            // ensures i is zero
+            if (i > 0) {
+                Math.random2f(-1.0, 1.0) => m_yVals[i];
+            }
             (i + 1) * 1.0/m_numSegments => m_xVals[i];
         }
         m_yVals[0] => m_currentValue;
@@ -65,13 +68,21 @@ class Gendy extends Chugen {
     // takes the excess of the input value and
     // reverts it back under the threshold created by
     // the max/min
-    fun float mirror(float in, float max, float min) {
+    fun float mirror(float in, float min, float max) {
         if (in > max) {
             return max - (in - max);
         }
-        if (in < min) {
+        else if (in < min) {
             return min + (min - in);
         }
+        else {
+            return in;
+        }
+    }
+
+    // distributions, algebraic for testing
+    fun float distribution(float in) {
+        return in/Math.sqrt(1.0 + Math.pow(in, 2));
     }
 
     // updates every new segment, updates interpolation value (m_addValue)
@@ -79,6 +90,12 @@ class Gendy extends Chugen {
     // the update method for the interpolation values and segment sizes,
     // both of which should be robust to the stochastic implementation
     fun float update(int idx) {
+        // test of the algebraic distribution
+        for (0 => int i; i < m_numSegments; i++) {
+            if (i > 0) {
+                mirror(distribution(Math.random2f(-0.1, 0.1)) + m_yVals[i], -1.0, 1.0) => m_yVals[i];
+            }
+        }
 
         // calculates segment length based on ratios
         if (idx == 0) {
