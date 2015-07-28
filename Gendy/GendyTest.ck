@@ -24,12 +24,12 @@ class Gendy extends Chugen {
         600 => m_maxFreq;
 
         // for testing only
-        150 => m_currentFreq;
+        100.1 => m_currentFreq;
 
         pi => m_pi;
         1.0/pi => m_invPi;
         0 => m_count;
-        4 => m_numSegments;
+        8 => m_numSegments;
     }
 
     fun float initVals() {
@@ -70,10 +70,10 @@ class Gendy extends Chugen {
     // the max/min
     fun float mirror(float in, float min, float max) {
         if (in > max) {
-            return max - (in - max);
+            return max - (in % max);
         }
         else if (in < min) {
-            return min + (min - in);
+            return min - (in % min);
         }
         else {
             return in;
@@ -91,11 +91,21 @@ class Gendy extends Chugen {
     // both of which should be robust to the stochastic implementation
     fun float update(int idx) {
         // test of the algebraic distribution
-        for (0 => int i; i < m_numSegments; i++) {
-            if (i > 0) {
-                mirror(distribution(Math.random2f(-0.1, 0.1)) + m_yVals[i], -1.0, 1.0) => m_yVals[i];
-            }
+        if (idx > 0) {
+            mirror(distribution(Math.random2f(-0.4, 0.4)) + m_yVals[idx], -1.0, 1.0) => m_yVals[idx];
         }
+
+        if (idx > 0 && idx < m_numSegments - 1) {
+            mirror(distribution(Math.random2f(-0.1, 0.1)) + m_xVals[idx], m_xVals[idx - 1], m_xVals[idx + 1]) => m_xVals[idx];
+        }
+        else if (idx == 0) {
+            mirror(distribution(Math.random2f(-0.1, 0.1)) + m_xVals[idx], 0.0, m_xVals[idx + 1]) => m_xVals[idx];
+        }
+        else if (idx == m_numSegments - 1) {
+            mirror(distribution(Math.random2f(-0.1, 0.1)) + m_xVals[idx], m_xVals[idx - 1], 1.0) => m_xVals[idx];
+        }
+
+        mirror(distribution(Math.random2f(-0.1, 0.1)) * m_currentFreq, m_minFreq, m_maxFreq) => m_currentFreq;
 
         // calculates segment length based on ratios
         if (idx == 0) {
@@ -135,8 +145,8 @@ class Gendy extends Chugen {
 
 Gendy g => dac;
 
-g.minFreq(10);
-g.maxFreq(30);
-g.numSegments(4);
+g.minFreq(180);
+g.maxFreq(200);
+g.numSegments(8);
 1::hour => now;
 30::samp => now;
